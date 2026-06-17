@@ -146,6 +146,31 @@ body:before{
     color:#8f3f10;
     margin-bottom:4px;
 }
+
+.reward-gold-title{
+    color:#8f3f10;
+    font-size:13px;
+    font-weight:700;
+    margin-bottom:8px;
+    text-align:center;
+    text-shadow:none;
+}
+.reward-gold-item{
+    color:#FFD700;
+    font-size:22px;
+    font-weight:bold;
+    text-align:center;
+    margin:10px 0;
+    text-shadow:2px 2px 0 #8a5d00,0 0 8px #ffef99;
+}
+.reward-normal-item{
+    color:#24170c;
+    font-size:14px;
+    text-align:center;
+    margin:8px 0;
+    font-weight:700;
+}
+
 .reward-content .reward-plus{
     color:#0d7b35;
     font-size:18px;
@@ -569,11 +594,11 @@ p{
             <details class="reward-toggle reward-left">
                 <summary>📦 公主獎勵寶箱</summary>
                 <div class="reward-content">
-                    <div class="reward-small-title">機率獲得</div>
-                    神創武器<br>
-                    武神碎片<br>
-                    太古藥水<br>
-                    神威藥水
+                    <div class="reward-gold-title">機率獲得</div>
+                    <div class="reward-gold-item">神創武器</div>
+                    <div class="reward-gold-item">武神碎片</div>
+                    <div class="reward-normal-item">太古治療或魔力藥水</div>
+                    <div class="reward-normal-item">神威治療或魔力藥水</div>
                 </div>
             </details>
 
@@ -585,8 +610,8 @@ p{
             <details class="reward-toggle reward-right">
                 <summary>🐰 戰鬥兔子蹦蹦裝</summary>
                 <div class="reward-content">
-                    永久<br>
-                    元素防禦力 <span class="reward-plus">+10%</span>
+                    <div class="reward-gold-item">永久</div>
+                    <div class="reward-normal-item">元素防禦力 +10%</div>
                 </div>
             </details>
         </div>
