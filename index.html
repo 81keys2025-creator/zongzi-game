@@ -13,6 +13,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .zongzi{font-size:100px;}
 .card{background:#f8f9fa;border-radius:12px;padding:20px;margin-top:20px;}
 .button{margin-top:20px;border:none;background:#5865F2;color:white;padding:15px 40px;font-size:20px;border-radius:12px;cursor:pointer;}
+.button:disabled{background:#b2bec3;cursor:not-allowed;}
 .logout{background:#636e72;}
 .avatar{width:80px;height:80px;border-radius:50%;margin-top:10px;}
 .debug{margin-top:20px;text-align:left;font-size:12px;background:#222;color:#0f0;padding:15px;border-radius:10px;white-space:pre-wrap;}
@@ -34,7 +35,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
         <p>剩餘粽葉</p>
         <div class="leaves" id="remainingLeaves">讀取中...</div>
 
-        <button class="button" onclick="rollDice()">拆粽子</button>
+        <button class="button" id="openBtn" onclick="openZongzi()">拆粽子</button>
 
         <div class="dice-result" id="diceResult"></div>
     </div>
@@ -57,17 +58,10 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     }
 });
 
+let currentGameState = null;
+
 function debug(msg){
     document.getElementById("debugBox").textContent += "\n" + msg;
-}
-
-function rollDice(){
-    const dice = Math.floor(Math.random() * 6) + 1;
-
-    document.getElementById("diceResult").innerHTML =
-        `🎲 骰出：${dice}`;
-
-    debug("骰子：" + dice);
 }
 
 async function loadGameState(){
@@ -83,13 +77,73 @@ async function loadGameState(){
     if(error){
         leavesBox.textContent = "讀取失敗";
         debug("game_state 讀取錯誤：" + error.message);
-        return;
+        return null;
     }
 
+    currentGameState = data;
     leavesBox.textContent = data.remaining_leaves;
+
     debug("粽子資料讀取成功");
     debug("總粽葉：" + data.total_leaves);
     debug("剩餘粽葉：" + data.remaining_leaves);
+
+    return data;
+}
+
+async function openZongzi(){
+    const openBtn = document.getElementById("openBtn");
+    const diceResult = document.getElementById("diceResult");
+    const leavesBox = document.getElementById("remainingLeaves");
+
+    openBtn.disabled = true;
+    diceResult.textContent = "拆粽子中...";
+
+    const game = await loadGameState();
+
+    if(!game){
+        diceResult.textContent = "讀取粽子失敗，請重試";
+        openBtn.disabled = false;
+        return;
+    }
+
+    if(game.remaining_leaves <= 0){
+        diceResult.textContent = "今日粽子已經被拆完了";
+        leavesBox.textContent = "0";
+        openBtn.disabled = false;
+        return;
+    }
+
+    const dice = Math.floor(Math.random() * 6) + 1;
+    const newRemainingLeaves = Math.max(0, game.remaining_leaves - dice);
+
+    const { data, error } = await supabaseClient
+        .from("game_state")
+        .update({
+            remaining_leaves: newRemainingLeaves
+        })
+        .eq("id", 1)
+        .select()
+        .single();
+
+    if(error){
+        diceResult.textContent = "扣除失敗，請重試";
+        debug("更新 game_state 錯誤：" + error.message);
+        openBtn.disabled = false;
+        return;
+    }
+
+    currentGameState = data;
+    leavesBox.textContent = data.remaining_leaves;
+
+    diceResult.innerHTML = `
+        🎲 骰出：${dice}<br>
+        🍃 剩餘：${data.remaining_leaves}
+    `;
+
+    debug("骰子：" + dice);
+    debug("更新後剩餘粽葉：" + data.remaining_leaves);
+
+    openBtn.disabled = false;
 }
 
 async function loginWithDiscord(){
@@ -132,6 +186,7 @@ async function checkUser(){
     const userBox = document.getElementById("userBox");
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    const openBtn = document.getElementById("openBtn");
 
     if(!user){
         userBox.innerHTML = `
@@ -140,6 +195,7 @@ async function checkUser(){
         `;
         loginBtn.style.display = "inline-block";
         logoutBtn.style.display = "none";
+        openBtn.disabled = true;
         return;
     }
 
@@ -157,6 +213,7 @@ async function checkUser(){
 
     loginBtn.style.display = "none";
     logoutBtn.style.display = "inline-block";
+    openBtn.disabled = false;
 
     debug("登入成功");
     debug("使用者名稱：" + name);
