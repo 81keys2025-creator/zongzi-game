@@ -290,6 +290,24 @@ p{
     100%{transform:translate(0,0) scale(1);}
 }
 
+.bonus-message{
+    display:none;
+    margin-top:16px;
+    padding:14px;
+    background:#ffd34f;
+    border:4px solid var(--black);
+    color:#c74712;
+    font-size:13px;
+    line-height:1.8;
+    box-shadow:4px 4px 0 #b77e16;
+    text-shadow:1px 1px 0 #fff7c7;
+    animation:pixelFlash .8s steps(2,end) infinite;
+}
+@keyframes pixelFlash{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.04);}
+}
+
 .dice-result{
     margin-top:24px;
     font-size:15px;
@@ -487,6 +505,7 @@ p{
             <button class="button" id="openBtn" onclick="openZongzi()">拆粽子</button>
 
             <div class="cooldown" id="cooldownText"></div>
+            <div class="bonus-message" id="bonusMessage"></div>
             <div class="dice-result" id="diceResult"></div>
         </div>
 
@@ -791,6 +810,8 @@ async function loadPlayerStatus(user){
         total_removed: result.player_total_removed || 0,
         total_opens: result.player_total_opens || 0,
         total_wins: result.player_total_wins || 0,
+        bonus_opens: result.bonus_opens || 0,
+        bonus_available: !!result.bonus_available,
         cooldown: !!result.cooldown,
         remaining_seconds: Number(result.remaining_seconds || 0),
         next_time: result.next_time || null
@@ -833,6 +854,12 @@ function updateCooldownUI(){
     if(!currentPlayer){
         openBtn.disabled=true;
         cooldownText.textContent="玩家資料讀取中...";
+        return;
+    }
+
+    if(Number(currentPlayer.bonus_opens || 0) > 0){
+        openBtn.disabled=false;
+        cooldownText.textContent="✨ 你有再拆一次機會";
         return;
     }
 
@@ -906,6 +933,11 @@ async function openZongzi(){
     const openBtn=document.getElementById("openBtn");
     const diceResult=document.getElementById("diceResult");
     const leavesBox=document.getElementById("remainingLeaves");
+    const bonusBox=document.getElementById("bonusMessage");
+    if(bonusBox){
+        bonusBox.style.display="none";
+        bonusBox.textContent="";
+    }
 
     const nowClick = Date.now();
     if(isOpeningZongzi || nowClick - lastOpenClickAt < OPEN_CLICK_GUARD_MS){
@@ -995,13 +1027,20 @@ async function openZongzi(){
         currentPlayer.total_removed = result.player_total_removed || 0;
         currentPlayer.total_opens = result.player_total_opens || 0;
         currentPlayer.total_wins = result.player_total_wins || 0;
+        currentPlayer.bonus_opens = result.bonus_opens || 0;
+        currentPlayer.bonus_available = Number(result.bonus_opens || 0) > 0;
 
         leavesBox.textContent = result.remaining_leaves;
         playLeafBurst(result.removed_leaves);
 
+        if(result.bonus_granted && bonusBox){
+            bonusBox.style.display="block";
+            bonusBox.textContent="✨ 算你運氣好，再拆一次！";
+        }
+
         diceResult.innerHTML = result.is_winner
             ? `🎉 恭喜你拆掉最後一片粽葉！<br>🏆 今日中獎者：${info.name}<br>🎲 骰出：${result.dice}<br>🍃 拆掉：${result.removed_leaves}<br>🍃 剩餘：0`
-            : `🎲 骰出：${result.dice}<br>🍃 拆掉：${result.removed_leaves}<br>🍃 剩餘：${result.remaining_leaves}`;
+            : `🎲 骰出：${result.dice}<br>🍃 拆掉：${result.removed_leaves}<br>🍃 剩餘：${result.remaining_leaves}${result.bonus_granted ? `<br>✨ 算你運氣好，再拆一次！` : ``}`;
 
         await loadWinners();
         await loadRanking();
@@ -1025,6 +1064,7 @@ function refreshUserBox(){
         <p>累積拆除：${currentPlayer.total_removed || 0} 片</p>
         <p>拆粽次數：${currentPlayer.total_opens || 0} 次</p>
         <p>中獎次數：${currentPlayer.total_wins || 0} 次</p>
+        <p style="color:#d85b18;line-height:1.8;">✨ 再拆一次：${currentPlayer.bonus_opens || 0} 次</p>
     `;
 }
 
