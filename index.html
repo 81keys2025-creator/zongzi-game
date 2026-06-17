@@ -668,10 +668,10 @@ p{
 <body>
 <div class="layout">
     <div class="side">
-        <div class="winner-title">🏆 中獎者列表</div>
+        <div class="winner-title">🏆 拆粽者列表</div>
         <div id="winnerList">讀取中...</div>
 
-        <div class="rank-title">📊 拆粽排行榜 TOP10</div>
+        <div class="rank-title">📊 拆粽排行TOP3獎勵</div>
         <div id="rankingList">讀取中...</div>
     </div>
 
@@ -848,7 +848,7 @@ async function loadWinners(){
     }
 
     if(!data || data.length===0){
-        winnerList.innerHTML=`<div class="empty-winner">目前尚未有中獎者</div>`;
+        winnerList.innerHTML=`<div class="empty-winner">目前尚未有拆粽者</div>`;
         return [];
     }
 
