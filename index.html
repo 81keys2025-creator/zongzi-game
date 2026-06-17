@@ -94,9 +94,13 @@ body:before{
     align-self:start;
 }
 .zongzi{
-    margin-top:8px;
+    position:relative;
+    width:fit-content;
+    margin:8px auto 0;
     display:flex;
     justify-content:center;
+    align-items:center;
+    overflow:visible;
 }
 .zongzi img{
     width:260px;
@@ -224,11 +228,12 @@ p{
 .leaf-burst-layer{
     position:absolute;
     left:50%;
-    top:48%;
+    top:46%;
     width:1px;
     height:1px;
     pointer-events:none;
-    z-index:5;
+    z-index:20;
+    overflow:visible;
 }
 .leaf-piece{
     position:absolute;
@@ -878,10 +883,10 @@ function playLeafBurst(count){
         leaf.className = "leaf-piece";
 
         const angle = (-120 + (240 / Math.max(1, safeCount - 1)) * i) + (Math.random() * 28 - 14);
-        const distance = 82 + Math.random() * 72;
+        const distance = 72 + Math.random() * 58;
         const rad = angle * Math.PI / 180;
         const dx = Math.cos(rad) * distance;
-        const dy = Math.sin(rad) * distance - 30;
+        const dy = Math.sin(rad) * distance - 18;
         const rot = (Math.random() > .5 ? 1 : -1) * (90 + Math.random() * 180);
 
         leaf.style.setProperty("--dx", `${dx}px`);
