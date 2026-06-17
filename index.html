@@ -24,9 +24,9 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .cooldown{margin-top:15px;font-size:18px;color:#636e72;font-weight:bold;}
 .status{font-size:22px;font-weight:bold;color:#d35400;margin-top:10px;}
 .winner-title{font-size:24px;font-weight:bold;margin-bottom:15px;}
-.winner-item{background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:10px;}
-.winner-date{font-weight:bold;color:#2d3436;}
-.winner-name{color:#d35400;font-size:18px;margin-top:5px;}
+.winner-item{background:#f8f9fa;border-radius:10px;padding:14px;margin-bottom:10px;}
+.winner-date{font-weight:bold;color:#2d3436;line-height:1.6;}
+.winner-name{color:#d35400;font-size:20px;font-weight:bold;margin-top:8px;}
 .empty-winner{color:#999;margin-top:5px;}
 .end-title{font-size:32px;font-weight:bold;color:#d35400;margin-top:10px;}
 .end-text{font-size:20px;color:#636e72;line-height:1.8;}
@@ -47,7 +47,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 
         <div class="card" id="userBox">載入中...</div>
 
-        <div class="card">
+        <div class="card" id="gameCard">
             <h2>今日粽子</h2>
             <div class="status" id="activityStatus"></div>
 
@@ -155,13 +155,25 @@ async function loadWinners(){
         return [];
     }
 
-    winnerList.innerHTML = data.map(w => `
-        <div class="winner-item">
-            <div class="winner-date">${formatDate(w.event_date)}</div>
-            <div class="winner-name">${w.discord_name || w.discord_id}</div>
-            <div class="empty-winner">骰出 ${w.dice || "-"}，拆掉 ${w.removed_leaves || "-"} 片</div>
-        </div>
-    `).join("");
+    winnerList.innerHTML = data.map((w,index) => {
+        const dayText =
+            index === 0 ? "🥇 第一天" :
+            index === 1 ? "🥈 第二天" :
+            index === 2 ? "🥉 第三天" :
+            `🏆 第${index+1}天`;
+
+        return `
+            <div class="winner-item">
+                <div class="winner-date">
+                    ${dayText}<br>
+                    ${formatDate(w.event_date)}
+                </div>
+                <div class="winner-name">
+                    ${w.discord_name || w.discord_id}
+                </div>
+            </div>
+        `;
+    }).join("");
 
     return data;
 }
@@ -262,10 +274,9 @@ function showEndedPage(game){
         </div>
     `;
 
+    document.getElementById("gameCard").style.display="none";
     document.getElementById("loginBtn").style.display="none";
     document.getElementById("logoutBtn").style.display="none";
-    document.getElementById("openBtn").disabled=true;
-    document.getElementById("cooldownText").textContent="活動已結束";
     document.getElementById("diceResult").textContent="";
 }
 
@@ -569,6 +580,8 @@ async function checkUser(){
         showEndedPage(game);
         return;
     }
+
+    document.getElementById("gameCard").style.display="block";
 
     const {data,error}=await supabaseClient.auth.getSession();
     if(error) debug("getSession 錯誤：" + error.message);
