@@ -483,141 +483,91 @@ async function openZongzi(){
     lastOpenClickAt = nowClick;
 
     try{
-        if(!currentUser || !currentPlayer){
-            diceResult.textContent="請先登入，或等待玩家資料讀取完成";
+        if(!currentUser){
+            diceResult.textContent="請先登入 Discord";
             return;
         }
 
         await loadGameState();
-    updateCooldownUI();
-
-    if(activityState === "not_started"){
-        diceResult.textContent="活動尚未開始";
-        return;
-    }
-
-    if(activityState === "ended"){
-        diceResult.textContent="活動已結束";
-        return;
-    }
-
-    if(openBtn.disabled){
-        diceResult.textContent="目前不能拆粽子";
-        return;
-    }
-
-    openBtn.disabled=true;
-    diceResult.textContent="拆粽子中...";
-
-    const game=await loadGameState();
-
-    if(!game || todayWinner || game.remaining_leaves<=0){
-        diceResult.textContent = todayWinner
-            ? `今日已開獎，中獎者：${todayWinner.discord_name || todayWinner.discord_id}`
-            : "今日粽子已經被拆完了";
         updateCooldownUI();
-        return;
-    }
 
-    const info=getDiscordInfo(currentUser);
-    const dice=Math.floor(Math.random()*6)+1;
-    const actualRemoved=Math.min(dice,game.remaining_leaves);
-    const newRemaining=Math.max(0,game.remaining_leaves-dice);
-    const isWinner = newRemaining === 0;
-    const nowIso=new Date().toISOString();
+        if(activityState === "not_started"){
+            diceResult.textContent="活動尚未開始";
+            return;
+        }
 
-    let updatedGame=null;
+        if(activityState === "ended"){
+            diceResult.textContent="活動已結束";
+            return;
+        }
 
-    if(isWinner){
-        const {data:winGame,error:winGameError}=await supabaseClient
-            .from("game_state")
-            .update({
-                remaining_leaves:0,
-                winner_discord_id:info.discordId
-            })
-            .eq("id",1)
-            .is("winner_discord_id",null)
-            .select()
-            .maybeSingle();
+        if(todayWinner || (currentGameState && currentGameState.remaining_leaves<=0)){
+            diceResult.textContent = todayWinner
+                ? `今日已開獎，中獎者：${todayWinner.discord_name || todayWinner.discord_id}`
+                : "今日粽子已經被拆完了";
+            updateCooldownUI();
+            return;
+        }
 
-        if(winGameError || !winGame){
+        openBtn.disabled=true;
+        diceResult.textContent="拆粽子中...";
+
+        const info=getDiscordInfo(currentUser);
+
+        const {data,error}=await supabaseClient.rpc("open_zongzi_rpc",{
+            p_discord_id: info.discordId,
+            p_discord_name: info.name
+        });
+
+        if(error){
+            diceResult.textContent="拆粽子失敗，請稍後再試";
+            debug("RPC open_zongzi_rpc 錯誤：" + error.message);
             await loadGameState();
-            await loadWinners();
-            diceResult.textContent="剛剛已經有人搶先拆完粽子了";
+            await loadRanking();
             updateCooldownUI();
             return;
         }
 
-        const {error:winnerError}=await supabaseClient
-            .from("winners")
-            .insert({
-                event_date:winGame.event_date,
-                discord_id:info.discordId,
-                discord_name:info.name,
-                removed_leaves:actualRemoved,
-                dice:dice
-            });
+        const result = data || {};
 
-        if(winnerError){
+        if(!result.ok){
+            if(result.reason === "cooldown"){
+                const seconds = Number(result.remaining_seconds || 0);
+                diceResult.textContent = seconds > 0
+                    ? "冷卻中，剩餘：" + formatTime(seconds * 1000)
+                    : (result.message || "冷卻中，還不能拆粽子");
+            }else{
+                diceResult.textContent = result.message || "目前不能拆粽子";
+            }
+
             await loadGameState();
-            await loadWinners();
-            diceResult.textContent="剛剛已經有人搶先中獎了";
+            await loadRanking();
             updateCooldownUI();
             return;
         }
 
-        updatedGame=winGame;
-    }else{
-        const {data:normalGame,error:normalError}=await supabaseClient
-            .from("game_state")
-            .update({remaining_leaves:newRemaining})
-            .eq("id",1)
-            .is("winner_discord_id",null)
-            .select()
-            .single();
-
-        if(normalError){
-            diceResult.textContent="扣除失敗，請重試";
-            debug("更新 game_state 錯誤：" + normalError.message);
-            updateCooldownUI();
-            return;
+        if(!currentPlayer){
+            currentPlayer = {};
         }
 
-        updatedGame=normalGame;
-    }
+        currentPlayer.discord_id = info.discordId;
+        currentPlayer.discord_name = info.name;
+        currentPlayer.last_open_time = new Date().toISOString();
+        currentPlayer.total_removed = result.player_total_removed || 0;
+        currentPlayer.total_opens = result.player_total_opens || 0;
+        currentPlayer.total_wins = result.player_total_wins || 0;
 
-    const {data:updatedPlayer,error:playerError}=await supabaseClient
-        .from("players")
-        .update({
-            last_open_time:nowIso,
-            total_removed:(currentPlayer.total_removed||0)+actualRemoved,
-            total_opens:(currentPlayer.total_opens||0)+1,
-            total_wins:(currentPlayer.total_wins||0)+(isWinner?1:0)
-        })
-        .eq("id",currentPlayer.id)
-        .select()
-        .single();
+        leavesBox.textContent = result.remaining_leaves;
 
-    if(playerError){
-        diceResult.textContent="玩家資料更新失敗";
-        debug("更新 players 錯誤：" + playerError.message);
-        updateCooldownUI();
-        return;
-    }
+        diceResult.innerHTML = result.is_winner
+            ? `🎉 恭喜你拆掉最後一片粽葉！<br>🏆 今日中獎者：${info.name}<br>🎲 骰出：${result.dice}<br>🍃 拆掉：${result.removed_leaves}<br>🍃 剩餘：0`
+            : `🎲 骰出：${result.dice}<br>🍃 拆掉：${result.removed_leaves}<br>🍃 剩餘：${result.remaining_leaves}`;
 
-    currentGameState=updatedGame;
-    currentPlayer=updatedPlayer;
-    leavesBox.textContent=updatedGame.remaining_leaves;
-
-    diceResult.innerHTML = isWinner
-        ? `🎉 恭喜你拆掉最後一片粽葉！<br>🏆 今日中獎者：${info.name}<br>🎲 骰出：${dice}<br>🍃 拆掉：${actualRemoved}<br>🍃 剩餘：0`
-        : `🎲 骰出：${dice}<br>🍃 拆掉：${actualRemoved}<br>🍃 剩餘：${updatedGame.remaining_leaves}`;
-
-    await loadWinners();
-    await loadRanking();
-    await loadGameState();
-    refreshUserBox();
-    startCooldownTimer();
+        await loadWinners();
+        await loadRanking();
+        await loadGameState();
+        refreshUserBox();
+        startCooldownTimer();
     }finally{
         isOpeningZongzi = false;
     }
