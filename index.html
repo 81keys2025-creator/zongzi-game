@@ -127,7 +127,6 @@ async function loadWinners(){
     }
 
     const eventDates = ["2026-06-19", "2026-06-20", "2026-06-21"];
-
     let html = "";
 
     eventDates.forEach(date => {
@@ -177,16 +176,19 @@ async function loadGameState(){
 async function loadOrCreatePlayer(user){
     const info = getDiscordInfo(user);
 
-    let { data: player, error } = await supabaseClient
+    const { data: players, error } = await supabaseClient
         .from("players")
         .select("*")
         .eq("discord_id", info.discordId)
-        .maybeSingle();
+        .order("id", { ascending: true })
+        .limit(1);
 
     if(error){
         debug("讀取玩家錯誤：" + error.message);
         return null;
     }
+
+    let player = players && players.length > 0 ? players[0] : null;
 
     if(!player){
         const { data: newPlayer, error: insertError } = await supabaseClient
@@ -219,14 +221,18 @@ async function loadOrCreatePlayer(user){
             .select()
             .single();
 
-        if(!updateError){
+        if(updateError){
+            debug("更新玩家名稱錯誤：" + updateError.message);
+        }else{
             player = updatedPlayer;
         }
     }
 
     currentPlayer = player;
     debug("玩家資料讀取成功");
+    debug("玩家ID：" + player.id);
     debug("玩家最後拆粽時間：" + (player.last_open_time || "尚未拆過"));
+
     return player;
 }
 
@@ -296,7 +302,7 @@ async function openZongzi(){
     }
 
     if(!currentPlayer){
-        diceResult.textContent = "玩家資料尚未讀取完成";
+        diceResult.textContent = "玩家資料尚未讀取完成，請重新整理";
         return;
     }
 
@@ -391,7 +397,6 @@ async function openZongzi(){
 
     currentGameState = updatedGame;
     currentPlayer = updatedPlayer;
-
     leavesBox.textContent = updatedGame.remaining_leaves;
 
     if(isWinner){
@@ -417,10 +422,10 @@ async function openZongzi(){
 
     await loadWinners();
     startCooldownTimer();
-    await refreshUserBox();
+    refreshUserBox();
 }
 
-async function refreshUserBox(){
+function refreshUserBox(){
     if(!currentUser || !currentPlayer) return;
 
     const info = getDiscordInfo(currentUser);
@@ -498,20 +503,19 @@ async function checkUser(){
     const info = getDiscordInfo(user);
     const player = await loadOrCreatePlayer(user);
 
-    userBox.innerHTML = `
-        <h2>玩家</h2>
-        ${info.avatar ? `<img class="avatar" src="${info.avatar}">` : ""}
-        <p>已登入：${info.name}</p>
-        <p style="font-size:12px;color:#636e72;">Discord ID：${info.discordId}</p>
-        ${player ? `
-            <p>累積拆除：${player.total_removed || 0} 片</p>
-            <p>拆粽次數：${player.total_opens || 0} 次</p>
-            <p>中獎次數：${player.total_wins || 0} 次</p>
-        ` : ""}
-    `;
+    if(!player){
+        userBox.innerHTML = `
+            <h2>玩家</h2>
+            <p>玩家資料讀取失敗，請重新整理</p>
+        `;
+        startCooldownTimer();
+        return;
+    }
 
     loginBtn.style.display = "none";
     logoutBtn.style.display = "inline-block";
+
+    refreshUserBox();
 
     debug("登入成功");
     debug("使用者名稱：" + info.name);
