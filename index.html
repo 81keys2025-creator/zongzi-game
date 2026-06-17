@@ -24,12 +24,18 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .cooldown{margin-top:15px;font-size:18px;color:#636e72;font-weight:bold;}
 .status{font-size:22px;font-weight:bold;color:#d35400;margin-top:10px;}
 .winner-title{font-size:24px;font-weight:bold;margin-bottom:15px;}
-.winner-item{background:#f8f9fa;border-radius:10px;padding:14px;margin-bottom:10px;}
-.winner-date{font-weight:bold;color:#2d3436;line-height:1.6;}
-.winner-name{color:#d35400;font-size:20px;font-weight:bold;margin-top:8px;}
+.winner-item{background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:10px;}
+.winner-date{font-weight:bold;color:#2d3436;}
+.winner-name{color:#d35400;font-size:18px;margin-top:5px;}
 .empty-winner{color:#999;margin-top:5px;}
-.end-title{font-size:32px;font-weight:bold;color:#d35400;margin-top:10px;}
-.end-text{font-size:20px;color:#636e72;line-height:1.8;}
+
+.rank-title{font-size:22px;font-weight:bold;margin-top:28px;margin-bottom:15px;padding-top:20px;border-top:1px solid #eee;}
+.rank-item{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.rank-left{display:flex;align-items:center;gap:8px;min-width:0;}
+.rank-medal{font-size:20px;flex:0 0 auto;}
+.rank-name{font-weight:bold;color:#2d3436;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rank-score{color:#d35400;font-weight:bold;flex:0 0 auto;margin-left:8px;}
+.rank-sub{font-size:12px;color:#999;margin-top:8px;}
 @media(max-width:900px){.layout{grid-template-columns:1fr;margin:20px;}}
 </style>
 </head>
@@ -39,6 +45,9 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
     <div class="side">
         <div class="winner-title">🏆 中獎者列表</div>
         <div id="winnerList">讀取中...</div>
+
+        <div class="rank-title">📊 拆粽排行榜 TOP10</div>
+        <div id="rankingList">讀取中...</div>
     </div>
 
     <div class="container">
@@ -47,7 +56,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 
         <div class="card" id="userBox">載入中...</div>
 
-        <div class="card" id="gameCard">
+        <div class="card">
             <h2>今日粽子</h2>
             <div class="status" id="activityStatus"></div>
 
@@ -155,25 +164,61 @@ async function loadWinners(){
         return [];
     }
 
-    winnerList.innerHTML = data.map((w,index) => {
-        const dayText =
-            index === 0 ? "🥇 第一天" :
-            index === 1 ? "🥈 第二天" :
-            index === 2 ? "🥉 第三天" :
-            `🏆 第${index+1}天`;
+    winnerList.innerHTML = data.map(w => `
+        <div class="winner-item">
+            <div class="winner-date">${formatDate(w.event_date)}</div>
+            <div class="winner-name">${w.discord_name || w.discord_id}</div>
+            <div class="empty-winner">骰出 ${w.dice || "-"}，拆掉 ${w.removed_leaves || "-"} 片</div>
+        </div>
+    `).join("");
+
+    return data;
+}
+
+
+async function loadRanking(){
+    const rankingList=document.getElementById("rankingList");
+
+    const {data,error}=await supabaseClient
+        .from("players")
+        .select("discord_name,total_removed,total_opens,total_wins")
+        .gt("total_removed",0)
+        .order("total_removed",{ascending:false})
+        .order("total_wins",{ascending:false})
+        .order("total_opens",{ascending:true})
+        .limit(10);
+
+    if(error){
+        rankingList.innerHTML=`<div class="empty-winner">排行榜讀取失敗</div>`;
+        debug("讀取 players 排行榜錯誤：" + error.message);
+        return [];
+    }
+
+    if(!data || data.length===0){
+        rankingList.innerHTML=`<div class="empty-winner">目前尚無排行資料</div>`;
+        return [];
+    }
+
+    rankingList.innerHTML = data.map((p,index) => {
+        const medal =
+            index === 0 ? "🥇" :
+            index === 1 ? "🥈" :
+            index === 2 ? "🥉" :
+            `${index+1}.`;
+
+        const name = p.discord_name || "Discord 玩家";
+        const removed = p.total_removed || 0;
 
         return `
-            <div class="winner-item">
-                <div class="winner-date">
-                    ${dayText}<br>
-                    ${formatDate(w.event_date)}
+            <div class="rank-item">
+                <div class="rank-left">
+                    <div class="rank-medal">${medal}</div>
+                    <div class="rank-name" title="${name}">${name}</div>
                 </div>
-                <div class="winner-name">
-                    ${w.discord_name || w.discord_id}
-                </div>
+                <div class="rank-score">${removed}片</div>
             </div>
         `;
-    }).join("");
+    }).join("") + `<div class="rank-sub">依累積拆除粽葉片數排序</div>`;
 
     return data;
 }
@@ -261,23 +306,6 @@ async function loadGameState(){
     todayWinner = winner || null;
 
     return game;
-}
-
-function showEndedPage(game){
-    if(cooldownTimer) clearInterval(cooldownTimer);
-
-    document.getElementById("userBox").innerHTML=`
-        <div class="end-title">🏆 端午拆粽子活動已結束</div>
-        <div class="end-text">
-            感謝各位參與本次活動<br>
-            請查看左側中獎者列表
-        </div>
-    `;
-
-    document.getElementById("gameCard").style.display="none";
-    document.getElementById("loginBtn").style.display="none";
-    document.getElementById("logoutBtn").style.display="none";
-    document.getElementById("diceResult").textContent="";
 }
 
 async function loadOrCreatePlayer(user){
@@ -389,11 +417,6 @@ function updateCooldownUI(){
 function startCooldownTimer(){
     if(cooldownTimer) clearInterval(cooldownTimer);
     updateCooldownUI();
-
-    if(activityState === "ended"){
-        return;
-    }
-
     cooldownTimer=setInterval(updateCooldownUI,1000);
 }
 
@@ -533,6 +556,7 @@ async function openZongzi(){
         : `🎲 骰出：${dice}<br>🍃 拆掉：${actualRemoved}<br>🍃 剩餘：${updatedGame.remaining_leaves}`;
 
     await loadWinners();
+    await loadRanking();
     await loadGameState();
     refreshUserBox();
     startCooldownTimer();
@@ -572,16 +596,8 @@ async function checkUser(){
     document.getElementById("debugBox").textContent="目前網址：" + window.location.href;
 
     await loadWinners();
-    const game = await loadGameState();
-
-    if(activityState === "ended"){
-        currentUser=null;
-        currentPlayer=null;
-        showEndedPage(game);
-        return;
-    }
-
-    document.getElementById("gameCard").style.display="block";
+    await loadRanking();
+    await loadGameState();
 
     const {data,error}=await supabaseClient.auth.getSession();
     if(error) debug("getSession 錯誤：" + error.message);
