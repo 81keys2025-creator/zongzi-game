@@ -17,6 +17,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .avatar{width:80px;height:80px;border-radius:50%;margin-top:10px;}
 .debug{margin-top:20px;text-align:left;font-size:12px;background:#222;color:#0f0;padding:15px;border-radius:10px;white-space:pre-wrap;}
 .leaves{font-size:48px;font-weight:bold;color:#2d3436;margin:10px 0;}
+.dice-result{margin-top:20px;font-size:28px;font-weight:bold;color:#e17055;}
 </style>
 </head>
 
@@ -29,8 +30,13 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 
     <div class="card" id="gameBox">
         <h2>今日粽子</h2>
+
         <p>剩餘粽葉</p>
         <div class="leaves" id="remainingLeaves">讀取中...</div>
+
+        <button class="button" onclick="rollDice()">拆粽子</button>
+
+        <div class="dice-result" id="diceResult"></div>
     </div>
 
     <button class="button" id="loginBtn" onclick="loginWithDiscord()">使用 Discord 登入</button>
@@ -53,6 +59,15 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 function debug(msg){
     document.getElementById("debugBox").textContent += "\n" + msg;
+}
+
+function rollDice(){
+    const dice = Math.floor(Math.random() * 6) + 1;
+
+    document.getElementById("diceResult").innerHTML =
+        `🎲 骰出：${dice}`;
+
+    debug("骰子：" + dice);
 }
 
 async function loadGameState(){
