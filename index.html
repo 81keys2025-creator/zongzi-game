@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>拆粽子遊戲</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 body{
@@ -12,7 +13,6 @@ body{
     background:#f5f5f5;
     font-family:"Microsoft JhengHei",sans-serif;
 }
-
 .container{
     max-width:800px;
     margin:40px auto;
@@ -22,87 +22,100 @@ body{
     box-shadow:0 0 15px rgba(0,0,0,.1);
     text-align:center;
 }
-
-h1{
-    margin-top:0;
-    color:#2d3436;
-}
-
-.zongzi{
-    font-size:100px;
-}
-
+.zongzi{font-size:100px;}
 .card{
     background:#f8f9fa;
     border-radius:12px;
     padding:20px;
     margin-top:20px;
 }
-
-.cooldown{
-    font-size:28px;
-    color:#e17055;
-    font-weight:bold;
-}
-
 .button{
     margin-top:20px;
     border:none;
-    background:#00b894;
+    background:#5865F2;
     color:white;
     padding:15px 40px;
     font-size:20px;
     border-radius:12px;
     cursor:pointer;
 }
-
-.button:hover{
-    opacity:.9;
-}
-
-.note{
-    color:#636e72;
-    margin-top:15px;
+.logout{background:#636e72;}
+.avatar{
+    width:80px;
+    height:80px;
+    border-radius:50%;
+    margin-top:10px;
 }
 </style>
-
 </head>
+
 <body>
-
 <div class="container">
-
     <div class="zongzi">🍙</div>
-
     <h1>拆粽子遊戲</h1>
 
-    <div class="card">
-        <h2>玩家</h2>
-        <div>尚未登入 Discord</div>
+    <div class="card" id="userBox">
+        載入中...
     </div>
 
-    <div class="card">
-        <h2>剩餘粽葉</h2>
-        <div style="font-size:40px;font-weight:bold;">
-            150
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>下次可拆時間</h2>
-        <div class="cooldown">
-            03:00:00
-        </div>
-    </div>
-
-    <button class="button">
-        拆粽子
-    </button>
-
-    <div class="note">
-        第一版介面測試中
-    </div>
-
+    <button class="button" id="loginBtn" onclick="loginWithDiscord()">使用 Discord 登入</button>
+    <button class="button logout" id="logoutBtn" onclick="logout()" style="display:none;">登出</button>
 </div>
+
+<script>
+const SUPABASE_URL = "https://ibupsejdhvagpozoqorpl.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Ybz32jxKJ0DiJ6oUJvsXHA_tcEr80QH";
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function loginWithDiscord(){
+    await supabaseClient.auth.signInWithOAuth({
+        provider: "discord",
+        options: {
+            redirectTo: "https://zongzi-game.pages.dev"
+        }
+    });
+}
+
+async function logout(){
+    await supabaseClient.auth.signOut();
+    location.reload();
+}
+
+async function checkUser(){
+    const { data } = await supabaseClient.auth.getUser();
+    const user = data.user;
+
+    const userBox = document.getElementById("userBox");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    if(!user){
+        userBox.innerHTML = `
+            <h2>玩家</h2>
+            <p>尚未登入 Discord</p>
+        `;
+        loginBtn.style.display = "inline-block";
+        logoutBtn.style.display = "none";
+        return;
+    }
+
+    const name = user.user_metadata.full_name || user.user_metadata.name || "Discord 玩家";
+    const avatar = user.user_metadata.avatar_url || "";
+
+    userBox.innerHTML = `
+        <h2>玩家</h2>
+        ${avatar ? `<img class="avatar" src="${avatar}">` : ""}
+        <p>已登入：${name}</p>
+        <p style="font-size:12px;color:#636e72;">Discord ID：${user.user_metadata.provider_id || "取得中"}</p>
+    `;
+
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+}
+
+checkUser();
+</script>
 
 </body>
 </html>
