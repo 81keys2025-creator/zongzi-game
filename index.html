@@ -199,20 +199,21 @@ body:before{
 .zongzi-speech{
     position:absolute;
     left:50%;
-    top:-58px;
+    top:-42px;
     transform:translateX(-50%);
-    min-width:210px;
-    max-width:320px;
-    padding:10px 12px;
+    width:380px;
+    max-width:none;
+    padding:8px 12px;
     background:#fff7c7;
     border:3px solid var(--black);
     box-shadow:4px 4px 0 rgba(63,37,14,.75);
     color:#8f3f10;
     font-family:"Microsoft JhengHei",sans-serif;
     font-size:14px;
-    line-height:1.5;
+    line-height:1.4;
     font-weight:900;
     text-align:center;
+    white-space:nowrap;
     z-index:30;
     animation:speechPop 1.6s steps(2,end) infinite;
 }
@@ -643,10 +644,12 @@ p{
         left:auto;
         top:auto;
         transform:none;
+        width:auto;
         min-width:0;
         max-width:100%;
         margin:0 auto 10px;
         font-size:13px;
+        white-space:normal;
     }
     .zongzi-speech:before,
     .zongzi-speech:after{
@@ -757,7 +760,10 @@ const OPEN_CLICK_GUARD_MS = 3000;
 const ZONGZI_SPEECHES = [
     "來拆我啊",
     "如果你願意一層一層一層的拆開我的心",
-    "我還有好多層可以拆"
+    "我還有好多層可以拆",
+    "別急，後面還有好幾百層",
+    "今天會是你拆到最後一片嗎？",
+    "算你運氣好，再拆一次！"
 ];
 
 function randomizeZongziSpeech(){
