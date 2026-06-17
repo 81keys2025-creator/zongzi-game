@@ -28,6 +28,8 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .winner-date{font-weight:bold;color:#2d3436;}
 .winner-name{color:#d35400;font-size:18px;margin-top:5px;}
 .empty-winner{color:#999;margin-top:5px;}
+.end-title{font-size:32px;font-weight:bold;color:#d35400;margin-top:10px;}
+.end-text{font-size:20px;color:#636e72;line-height:1.8;}
 @media(max-width:900px){.layout{grid-template-columns:1fr;margin:20px;}}
 </style>
 </head>
@@ -249,6 +251,24 @@ async function loadGameState(){
     return game;
 }
 
+function showEndedPage(game){
+    if(cooldownTimer) clearInterval(cooldownTimer);
+
+    document.getElementById("userBox").innerHTML=`
+        <div class="end-title">🏆 端午拆粽子活動已結束</div>
+        <div class="end-text">
+            感謝各位參與本次活動<br>
+            請查看左側中獎者列表
+        </div>
+    `;
+
+    document.getElementById("loginBtn").style.display="none";
+    document.getElementById("logoutBtn").style.display="none";
+    document.getElementById("openBtn").disabled=true;
+    document.getElementById("cooldownText").textContent="活動已結束";
+    document.getElementById("diceResult").textContent="";
+}
+
 async function loadOrCreatePlayer(user){
     const info=getDiscordInfo(user);
 
@@ -358,6 +378,11 @@ function updateCooldownUI(){
 function startCooldownTimer(){
     if(cooldownTimer) clearInterval(cooldownTimer);
     updateCooldownUI();
+
+    if(activityState === "ended"){
+        return;
+    }
+
     cooldownTimer=setInterval(updateCooldownUI,1000);
 }
 
@@ -536,7 +561,14 @@ async function checkUser(){
     document.getElementById("debugBox").textContent="目前網址：" + window.location.href;
 
     await loadWinners();
-    await loadGameState();
+    const game = await loadGameState();
+
+    if(activityState === "ended"){
+        currentUser=null;
+        currentPlayer=null;
+        showEndedPage(game);
+        return;
+    }
 
     const {data,error}=await supabaseClient.auth.getSession();
     if(error) debug("getSession 錯誤：" + error.message);
