@@ -31,11 +31,15 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 
 .rank-title{font-size:22px;font-weight:bold;margin-top:28px;margin-bottom:15px;padding-top:20px;border-top:1px solid #eee;}
 .rank-item{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.rank-item.me{background:#fff3cd;border:1px solid #f1c40f;}
 .rank-left{display:flex;align-items:center;gap:8px;min-width:0;}
 .rank-medal{font-size:20px;flex:0 0 auto;}
 .rank-name{font-weight:bold;color:#2d3436;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rank-score{color:#d35400;font-weight:bold;flex:0 0 auto;margin-left:8px;}
+.rank-me{font-size:12px;color:#d35400;margin-left:4px;}
 .rank-sub{font-size:12px;color:#999;margin-top:8px;}
+.end-title{font-size:32px;font-weight:bold;color:#d35400;margin-top:10px;}
+.end-text{font-size:20px;color:#636e72;line-height:1.8;}
 @media(max-width:900px){.layout{grid-template-columns:1fr;margin:20px;}}
 </style>
 </head>
@@ -56,7 +60,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 
         <div class="card" id="userBox">載入中...</div>
 
-        <div class="card">
+        <div class="card" id="gameCard">
             <h2>今日粽子</h2>
             <div class="status" id="activityStatus"></div>
 
@@ -94,6 +98,10 @@ let currentPlayer = null;
 let cooldownTimer = null;
 let todayWinner = null;
 let activityState = "loading";
+let rankingTimer = null;
+let isOpeningZongzi = false;
+let lastOpenClickAt = 0;
+const OPEN_CLICK_GUARD_MS = 3000;
 
 function debug(msg){
     document.getElementById("debugBox").textContent += "\n" + msg;
@@ -164,13 +172,25 @@ async function loadWinners(){
         return [];
     }
 
-    winnerList.innerHTML = data.map(w => `
-        <div class="winner-item">
-            <div class="winner-date">${formatDate(w.event_date)}</div>
-            <div class="winner-name">${w.discord_name || w.discord_id}</div>
-            <div class="empty-winner">骰出 ${w.dice || "-"}，拆掉 ${w.removed_leaves || "-"} 片</div>
-        </div>
-    `).join("");
+    winnerList.innerHTML = data.map((w,index) => {
+        const dayText =
+            index === 0 ? "🥇 第一天" :
+            index === 1 ? "🥈 第二天" :
+            index === 2 ? "🥉 第三天" :
+            `🏆 第${index+1}天`;
+
+        return `
+            <div class="winner-item">
+                <div class="winner-date">
+                    ${dayText}<br>
+                    ${formatDate(w.event_date)}
+                </div>
+                <div class="winner-name">
+                    ${w.discord_name || w.discord_id}
+                </div>
+            </div>
+        `;
+    }).join("");
 
     return data;
 }
@@ -181,7 +201,7 @@ async function loadRanking(){
 
     const {data,error}=await supabaseClient
         .from("players")
-        .select("discord_name,total_removed,total_opens,total_wins")
+        .select("discord_id,discord_name,total_removed,total_opens,total_wins")
         .gt("total_removed",0)
         .order("total_removed",{ascending:false})
         .order("total_wins",{ascending:false})
@@ -201,24 +221,31 @@ async function loadRanking(){
 
     rankingList.innerHTML = data.map((p,index) => {
         const medal =
-            index === 0 ? "🥇" :
+            index === 0 ? "👑" :
             index === 1 ? "🥈" :
             index === 2 ? "🥉" :
             `${index+1}.`;
 
+        const rankText =
+            index === 0 ? "第一名" :
+            index === 1 ? "第二名" :
+            index === 2 ? "第三名" :
+            `第${index+1}名`;
+
         const name = p.discord_name || "Discord 玩家";
         const removed = p.total_removed || 0;
+        const isMe = currentPlayer && p.discord_id === currentPlayer.discord_id;
 
         return `
-            <div class="rank-item">
+            <div class="rank-item ${isMe ? "me" : ""}">
                 <div class="rank-left">
                     <div class="rank-medal">${medal}</div>
-                    <div class="rank-name" title="${name}">${name}</div>
+                    <div class="rank-name" title="${name}">${rankText} ${name}${isMe ? `<span class="rank-me">(你)</span>` : ""}</div>
                 </div>
                 <div class="rank-score">${removed}片</div>
             </div>
         `;
-    }).join("") + `<div class="rank-sub">依累積拆除粽葉片數排序</div>`;
+    }).join("") + `<div class="rank-sub">每 30 秒自動更新，依累積拆除粽葉片數排序</div>`;
 
     return data;
 }
@@ -306,6 +333,23 @@ async function loadGameState(){
     todayWinner = winner || null;
 
     return game;
+}
+
+function showEndedPage(game){
+    if(cooldownTimer) clearInterval(cooldownTimer);
+
+    document.getElementById("userBox").innerHTML=`
+        <div class="end-title">🏆 端午拆粽子活動已結束</div>
+        <div class="end-text">
+            感謝各位參與本次活動<br>
+            請查看左側中獎者列表與最終排行榜
+        </div>
+    `;
+
+    const gameCard=document.getElementById("gameCard");
+    if(gameCard) gameCard.style.display="none";
+    document.getElementById("loginBtn").style.display="none";
+    document.getElementById("logoutBtn").style.display="none";
 }
 
 async function loadOrCreatePlayer(user){
@@ -417,6 +461,11 @@ function updateCooldownUI(){
 function startCooldownTimer(){
     if(cooldownTimer) clearInterval(cooldownTimer);
     updateCooldownUI();
+
+    if(activityState === "ended"){
+        return;
+    }
+
     cooldownTimer=setInterval(updateCooldownUI,1000);
 }
 
@@ -425,12 +474,21 @@ async function openZongzi(){
     const diceResult=document.getElementById("diceResult");
     const leavesBox=document.getElementById("remainingLeaves");
 
-    if(!currentUser || !currentPlayer){
-        diceResult.textContent="請先登入，或等待玩家資料讀取完成";
+    const nowClick = Date.now();
+    if(isOpeningZongzi || nowClick - lastOpenClickAt < OPEN_CLICK_GUARD_MS){
+        diceResult.textContent="操作太快，請稍等一下";
         return;
     }
+    isOpeningZongzi = true;
+    lastOpenClickAt = nowClick;
 
-    await loadGameState();
+    try{
+        if(!currentUser || !currentPlayer){
+            diceResult.textContent="請先登入，或等待玩家資料讀取完成";
+            return;
+        }
+
+        await loadGameState();
     updateCooldownUI();
 
     if(activityState === "not_started"){
@@ -560,6 +618,9 @@ async function openZongzi(){
     await loadGameState();
     refreshUserBox();
     startCooldownTimer();
+    }finally{
+        isOpeningZongzi = false;
+    }
 }
 
 function refreshUserBox(){
@@ -570,7 +631,6 @@ function refreshUserBox(){
         <h2>玩家</h2>
         ${info.avatar ? `<img class="avatar" src="${info.avatar}">` : ""}
         <p>已登入：${info.name}</p>
-        <p style="font-size:12px;color:#636e72;">Discord ID：${info.discordId}</p>
         <p>累積拆除：${currentPlayer.total_removed || 0} 片</p>
         <p>拆粽次數：${currentPlayer.total_opens || 0} 次</p>
         <p>中獎次數：${currentPlayer.total_wins || 0} 次</p>
@@ -596,8 +656,18 @@ async function checkUser(){
     document.getElementById("debugBox").textContent="目前網址：" + window.location.href;
 
     await loadWinners();
-    await loadRanking();
-    await loadGameState();
+    const game = await loadGameState();
+
+    if(activityState === "ended"){
+        currentUser=null;
+        currentPlayer=null;
+        await loadRanking();
+        showEndedPage(game);
+        return;
+    }
+
+    const gameCard=document.getElementById("gameCard");
+    if(gameCard) gameCard.style.display="block";
 
     const {data,error}=await supabaseClient.auth.getSession();
     if(error) debug("getSession 錯誤：" + error.message);
@@ -611,6 +681,7 @@ async function checkUser(){
 
     if(!user){
         currentPlayer=null;
+        await loadRanking();
         userBox.innerHTML=`<h2>玩家</h2><p>尚未登入 Discord</p>`;
         loginBtn.style.display="inline-block";
         logoutBtn.style.display="none";
@@ -619,6 +690,7 @@ async function checkUser(){
     }
 
     await loadOrCreatePlayer(user);
+    await loadRanking();
 
     loginBtn.style.display="none";
     logoutBtn.style.display="inline-block";
@@ -632,6 +704,9 @@ supabaseClient.auth.onAuthStateChange(() => {
 });
 
 checkUser();
+
+if(rankingTimer) clearInterval(rankingTimer);
+rankingTimer = setInterval(loadRanking, 30000);
 </script>
 </body>
 </html>
