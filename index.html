@@ -9,7 +9,9 @@
 
 <style>
 body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
-.container{max-width:800px;margin:40px auto;background:white;border-radius:16px;padding:30px;box-shadow:0 0 15px rgba(0,0,0,.1);text-align:center;}
+.layout{max-width:1100px;margin:40px auto;display:grid;grid-template-columns:280px 1fr;gap:20px;}
+.container{background:white;border-radius:16px;padding:30px;box-shadow:0 0 15px rgba(0,0,0,.1);text-align:center;}
+.side{background:white;border-radius:16px;padding:20px;box-shadow:0 0 15px rgba(0,0,0,.1);}
 .zongzi{font-size:100px;}
 .card{background:#f8f9fa;border-radius:12px;padding:20px;margin-top:20px;}
 .button{margin-top:20px;border:none;background:#5865F2;color:white;padding:15px 40px;font-size:20px;border-radius:12px;cursor:pointer;}
@@ -20,32 +22,49 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .leaves{font-size:48px;font-weight:bold;color:#2d3436;margin:10px 0;}
 .dice-result{margin-top:20px;font-size:28px;font-weight:bold;color:#e17055;}
 .cooldown{margin-top:15px;font-size:18px;color:#636e72;font-weight:bold;}
+.winner-title{font-size:24px;font-weight:bold;margin-bottom:15px;}
+.winner-item{background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:10px;}
+.winner-date{font-weight:bold;color:#2d3436;}
+.winner-name{color:#d35400;font-size:18px;margin-top:5px;}
+.empty-winner{color:#999;margin-top:5px;}
+@media(max-width:900px){
+    .layout{grid-template-columns:1fr;margin:20px;}
+}
 </style>
 </head>
 
 <body>
-<div class="container">
-    <div class="zongzi">🍙</div>
-    <h1>拆粽子遊戲</h1>
+<div class="layout">
 
-    <div class="card" id="userBox">載入中...</div>
-
-    <div class="card" id="gameBox">
-        <h2>今日粽子</h2>
-
-        <p>剩餘粽葉</p>
-        <div class="leaves" id="remainingLeaves">讀取中...</div>
-
-        <button class="button" id="openBtn" onclick="openZongzi()">拆粽子</button>
-
-        <div class="cooldown" id="cooldownText"></div>
-        <div class="dice-result" id="diceResult"></div>
+    <div class="side">
+        <div class="winner-title">🏆 中獎者列表</div>
+        <div id="winnerList">讀取中...</div>
     </div>
 
-    <button class="button" id="loginBtn" onclick="loginWithDiscord()">使用 Discord 登入</button>
-    <button class="button logout" id="logoutBtn" onclick="logout()" style="display:none;">登出</button>
+    <div class="container">
+        <div class="zongzi">🍙</div>
+        <h1>拆粽子遊戲</h1>
 
-    <div class="debug" id="debugBox">debug...</div>
+        <div class="card" id="userBox">載入中...</div>
+
+        <div class="card" id="gameBox">
+            <h2>今日粽子</h2>
+
+            <p>剩餘粽葉</p>
+            <div class="leaves" id="remainingLeaves">讀取中...</div>
+
+            <button class="button" id="openBtn" onclick="openZongzi()">拆粽子</button>
+
+            <div class="cooldown" id="cooldownText"></div>
+            <div class="dice-result" id="diceResult"></div>
+        </div>
+
+        <button class="button" id="loginBtn" onclick="loginWithDiscord()">使用 Discord 登入</button>
+        <button class="button logout" id="logoutBtn" onclick="logout()" style="display:none;">登出</button>
+
+        <div class="debug" id="debugBox">debug...</div>
+    </div>
+
 </div>
 
 <script>
@@ -76,8 +95,12 @@ function formatTime(ms){
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-
     return `${hours}小時 ${minutes}分 ${seconds}秒`;
+}
+
+function formatDate(dateText){
+    const d = new Date(dateText);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 function getDiscordInfo(user){
@@ -85,8 +108,44 @@ function getDiscordInfo(user){
     const name = meta.full_name || meta.name || meta.preferred_username || "Discord 玩家";
     const avatar = meta.avatar_url || meta.picture || "";
     const discordId = meta.provider_id || meta.sub || user.id;
-
     return { name, avatar, discordId };
+}
+
+async function loadWinners(){
+    const winnerList = document.getElementById("winnerList");
+
+    const { data, error } = await supabaseClient
+        .from("winners")
+        .select("*")
+        .order("event_date", { ascending: true })
+        .order("created_at", { ascending: true });
+
+    if(error){
+        winnerList.innerHTML = `<div class="empty-winner">中獎者讀取失敗</div>`;
+        debug("讀取 winners 錯誤：" + error.message);
+        return;
+    }
+
+    const eventDates = ["2026-06-19", "2026-06-20", "2026-06-21"];
+
+    let html = "";
+
+    eventDates.forEach(date => {
+        const winner = data.find(w => w.event_date === date);
+
+        html += `
+            <div class="winner-item">
+                <div class="winner-date">${formatDate(date)}</div>
+                ${
+                    winner
+                    ? `<div class="winner-name">${winner.discord_name || winner.discord_id}</div>`
+                    : `<div class="empty-winner">尚未產生</div>`
+                }
+            </div>
+        `;
+    });
+
+    winnerList.innerHTML = html;
 }
 
 async function loadGameState(){
@@ -175,6 +234,12 @@ function updateCooldownUI(){
     const openBtn = document.getElementById("openBtn");
     const cooldownText = document.getElementById("cooldownText");
 
+    if(currentGameState && currentGameState.remaining_leaves <= 0){
+        openBtn.disabled = true;
+        cooldownText.textContent = "今日粽子已經拆完";
+        return;
+    }
+
     if(!currentUser){
         openBtn.disabled = true;
         cooldownText.textContent = "請先登入 Discord";
@@ -238,7 +303,7 @@ async function openZongzi(){
     updateCooldownUI();
 
     if(openBtn.disabled){
-        diceResult.textContent = "還在冷卻中，不能拆粽子";
+        diceResult.textContent = "目前不能拆粽子";
         return;
     }
 
@@ -260,16 +325,24 @@ async function openZongzi(){
         return;
     }
 
+    const info = getDiscordInfo(currentUser);
     const dice = Math.floor(Math.random() * 6) + 1;
     const actualRemoved = Math.min(dice, game.remaining_leaves);
     const newRemainingLeaves = Math.max(0, game.remaining_leaves - dice);
+    const isWinner = game.remaining_leaves > 0 && newRemainingLeaves === 0;
     const nowIso = new Date().toISOString();
+
+    const gameUpdateData = {
+        remaining_leaves: newRemainingLeaves
+    };
+
+    if(isWinner){
+        gameUpdateData.winner_discord_id = info.discordId;
+    }
 
     const { data: updatedGame, error: gameError } = await supabaseClient
         .from("game_state")
-        .update({
-            remaining_leaves: newRemainingLeaves
-        })
+        .update(gameUpdateData)
         .eq("id", 1)
         .select()
         .single();
@@ -281,12 +354,29 @@ async function openZongzi(){
         return;
     }
 
+    if(isWinner){
+        const { error: winnerError } = await supabaseClient
+            .from("winners")
+            .insert({
+                event_date: updatedGame.event_date,
+                discord_id: info.discordId,
+                discord_name: info.name,
+                removed_leaves: actualRemoved,
+                dice: dice
+            });
+
+        if(winnerError){
+            debug("新增 winners 錯誤：" + winnerError.message);
+        }
+    }
+
     const { data: updatedPlayer, error: playerError } = await supabaseClient
         .from("players")
         .update({
             last_open_time: nowIso,
             total_removed: (currentPlayer.total_removed || 0) + actualRemoved,
-            total_opens: (currentPlayer.total_opens || 0) + 1
+            total_opens: (currentPlayer.total_opens || 0) + 1,
+            total_wins: (currentPlayer.total_wins || 0) + (isWinner ? 1 : 0)
         })
         .eq("id", currentPlayer.id)
         .select()
@@ -304,19 +394,47 @@ async function openZongzi(){
 
     leavesBox.textContent = updatedGame.remaining_leaves;
 
-    diceResult.innerHTML = `
-        🎲 骰出：${dice}<br>
-        🍃 拆掉：${actualRemoved}<br>
-        🍃 剩餘：${updatedGame.remaining_leaves}
-    `;
+    if(isWinner){
+        diceResult.innerHTML = `
+            🎉 恭喜你拆掉最後一片粽葉！<br>
+            🏆 今日中獎者：${info.name}<br>
+            🎲 骰出：${dice}<br>
+            🍃 拆掉：${actualRemoved}<br>
+            🍃 剩餘：0
+        `;
+    }else{
+        diceResult.innerHTML = `
+            🎲 骰出：${dice}<br>
+            🍃 拆掉：${actualRemoved}<br>
+            🍃 剩餘：${updatedGame.remaining_leaves}
+        `;
+    }
 
     debug("骰子：" + dice);
     debug("實際拆掉：" + actualRemoved);
     debug("更新後剩餘粽葉：" + updatedGame.remaining_leaves);
-    debug("玩家累積拆除：" + updatedPlayer.total_removed);
-    debug("玩家累積次數：" + updatedPlayer.total_opens);
+    debug("是否中獎：" + (isWinner ? "是" : "否"));
 
+    await loadWinners();
     startCooldownTimer();
+    await refreshUserBox();
+}
+
+async function refreshUserBox(){
+    if(!currentUser || !currentPlayer) return;
+
+    const info = getDiscordInfo(currentUser);
+    const userBox = document.getElementById("userBox");
+
+    userBox.innerHTML = `
+        <h2>玩家</h2>
+        ${info.avatar ? `<img class="avatar" src="${info.avatar}">` : ""}
+        <p>已登入：${info.name}</p>
+        <p style="font-size:12px;color:#636e72;">Discord ID：${info.discordId}</p>
+        <p>累積拆除：${currentPlayer.total_removed || 0} 片</p>
+        <p>拆粽次數：${currentPlayer.total_opens || 0} 次</p>
+        <p>中獎次數：${currentPlayer.total_wins || 0} 次</p>
+    `;
 }
 
 async function loginWithDiscord(){
@@ -343,6 +461,7 @@ async function checkUser(){
     const debugBox = document.getElementById("debugBox");
     debugBox.textContent = "目前網址：" + window.location.href;
 
+    await loadWinners();
     await loadGameState();
 
     const { data, error } = await supabaseClient.auth.getSession();
@@ -387,6 +506,7 @@ async function checkUser(){
         ${player ? `
             <p>累積拆除：${player.total_removed || 0} 片</p>
             <p>拆粽次數：${player.total_opens || 0} 次</p>
+            <p>中獎次數：${player.total_wins || 0} 次</p>
         ` : ""}
     `;
 
