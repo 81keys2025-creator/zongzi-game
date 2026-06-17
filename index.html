@@ -22,6 +22,7 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 .leaves{font-size:48px;font-weight:bold;color:#2d3436;margin:10px 0;}
 .dice-result{margin-top:20px;font-size:28px;font-weight:bold;color:#e17055;}
 .cooldown{margin-top:15px;font-size:18px;color:#636e72;font-weight:bold;}
+.status{font-size:22px;font-weight:bold;color:#d35400;margin-top:10px;}
 .winner-title{font-size:24px;font-weight:bold;margin-bottom:15px;}
 .winner-item{background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:10px;}
 .winner-date{font-weight:bold;color:#2d3436;}
@@ -46,6 +47,8 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 
         <div class="card">
             <h2>今日粽子</h2>
+            <div class="status" id="activityStatus"></div>
+
             <p>剩餘粽葉</p>
             <div class="leaves" id="remainingLeaves">讀取中...</div>
 
@@ -65,7 +68,10 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 <script>
 const SUPABASE_URL = "https://ibupsejdhvagpozqorpl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Ybz32jxKJ0DiJ6oUJvsXHA_tcEr80QH";
+
 const COOLDOWN_HOURS = 3;
+const MIN_LEAVES = 100;
+const MAX_LEAVES = 200;
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
@@ -76,9 +82,22 @@ let currentUser = null;
 let currentPlayer = null;
 let cooldownTimer = null;
 let todayWinner = null;
+let activityState = "loading";
 
 function debug(msg){
     document.getElementById("debugBox").textContent += "\n" + msg;
+}
+
+function getTodayString(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+}
+
+function getRandomLeaves(){
+    return Math.floor(Math.random() * (MAX_LEAVES - MIN_LEAVES + 1)) + MIN_LEAVES;
 }
 
 function formatTime(ms){
@@ -98,6 +117,20 @@ function getDiscordInfo(user){
         avatar: meta.avatar_url || meta.picture || "",
         discordId: meta.provider_id || meta.sub || user.id
     };
+}
+
+function checkActivityState(game){
+    const today = getTodayString();
+
+    if(today < game.activity_start_date){
+        return "not_started";
+    }
+
+    if(today >= game.activity_end_date){
+        return "ended";
+    }
+
+    return "active";
 }
 
 async function loadWinners(){
@@ -131,8 +164,46 @@ async function loadWinners(){
     return data;
 }
 
+async function resetGameForTodayIfNeeded(game){
+    const today = getTodayString();
+
+    if(activityState !== "active"){
+        return game;
+    }
+
+    if(game.event_date === today){
+        return game;
+    }
+
+    const newLeaves = getRandomLeaves();
+
+    const {data,error}=await supabaseClient
+        .from("game_state")
+        .update({
+            event_date: today,
+            total_leaves: newLeaves,
+            remaining_leaves: newLeaves,
+            winner_discord_id: null
+        })
+        .eq("id", 1)
+        .select()
+        .single();
+
+    if(error){
+        debug("每日重置失敗：" + error.message);
+        return game;
+    }
+
+    debug("每日重置完成");
+    debug("新日期：" + today);
+    debug("新粽葉：" + newLeaves);
+
+    return data;
+}
+
 async function loadGameState(){
     const leavesBox=document.getElementById("remainingLeaves");
+    const statusBox=document.getElementById("activityStatus");
     leavesBox.textContent="讀取中...";
 
     const {data,error}=await supabaseClient
@@ -143,22 +214,39 @@ async function loadGameState(){
 
     if(error){
         leavesBox.textContent="讀取失敗";
+        statusBox.textContent="";
         debug("game_state 讀取錯誤：" + error.message);
         return null;
     }
 
-    currentGameState=data;
-    leavesBox.textContent=data.remaining_leaves;
+    activityState = checkActivityState(data);
+
+    let game = data;
+
+    if(activityState === "active"){
+        game = await resetGameForTodayIfNeeded(data);
+    }
+
+    currentGameState = game;
+    leavesBox.textContent = game.remaining_leaves;
+
+    if(activityState === "not_started"){
+        statusBox.textContent = `活動尚未開始，開始日期：${formatDate(game.activity_start_date)}`;
+    }else if(activityState === "ended"){
+        statusBox.textContent = `活動已結束，結束日期：${formatDate(game.activity_end_date)}`;
+    }else{
+        statusBox.textContent = `活動進行中：${formatDate(game.event_date)}`;
+    }
 
     const {data:winner}=await supabaseClient
         .from("winners")
         .select("*")
-        .eq("event_date",data.event_date)
+        .eq("event_date",game.event_date)
         .maybeSingle();
 
     todayWinner = winner || null;
 
-    return data;
+    return game;
 }
 
 async function loadOrCreatePlayer(user){
@@ -217,6 +305,18 @@ function updateCooldownUI(){
     const openBtn=document.getElementById("openBtn");
     const cooldownText=document.getElementById("cooldownText");
 
+    if(activityState === "not_started"){
+        openBtn.disabled=true;
+        cooldownText.textContent="活動尚未開始";
+        return;
+    }
+
+    if(activityState === "ended"){
+        openBtn.disabled=true;
+        cooldownText.textContent="活動已結束";
+        return;
+    }
+
     if(todayWinner || (currentGameState && currentGameState.remaining_leaves<=0)){
         openBtn.disabled=true;
         cooldownText.textContent = todayWinner
@@ -273,6 +373,16 @@ async function openZongzi(){
 
     await loadGameState();
     updateCooldownUI();
+
+    if(activityState === "not_started"){
+        diceResult.textContent="活動尚未開始";
+        return;
+    }
+
+    if(activityState === "ended"){
+        diceResult.textContent="活動已結束";
+        return;
+    }
 
     if(openBtn.disabled){
         diceResult.textContent="目前不能拆粽子";
