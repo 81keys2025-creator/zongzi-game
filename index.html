@@ -330,10 +330,13 @@ p{
     display:flex;
     align-items:center;
     gap:9px;
+    flex:1;
     min-width:0;
 }
 .rank-medal{font-size:18px;flex:0 0 auto;}
 .rank-name{
+    flex:1;
+    min-width:0;
     font-weight:400;
     color:var(--ink);
     white-space:nowrap;
@@ -571,12 +574,6 @@ async function loadRanking(){
             index === 2 ? "🥉" :
             `${index+1}.`;
 
-        const rankText =
-            index === 0 ? "第一名" :
-            index === 1 ? "第二名" :
-            index === 2 ? "第三名" :
-            `第${index+1}名`;
-
         const name = p.discord_name || "Discord 玩家";
         const removed = p.total_removed || 0;
         const isMe = currentPlayer && p.discord_id === currentPlayer.discord_id;
@@ -585,7 +582,7 @@ async function loadRanking(){
             <div class="rank-item ${isMe ? "me" : ""}">
                 <div class="rank-left">
                     <div class="rank-medal">${medal}</div>
-                    <div class="rank-name" title="${name}">${rankText} ${name}${isMe ? `<span class="rank-me">(你)</span>` : ""}</div>
+                    <div class="rank-name" title="${name}">${name}${isMe ? `<span class="rank-me">(你)</span>` : ""}</div>
                 </div>
                 <div class="rank-score">${removed}片</div>
             </div>
