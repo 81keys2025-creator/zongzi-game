@@ -84,7 +84,6 @@ body{margin:0;background:#f5f5f5;font-family:"Microsoft JhengHei",sans-serif;}
 const SUPABASE_URL = "https://ibupsejdhvagpozqorpl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Ybz32jxKJ0DiJ6oUJvsXHA_tcEr80QH";
 
-const COOLDOWN_HOURS = 3;
 const MIN_LEAVES = 100;
 const MAX_LEAVES = 200;
 
@@ -98,6 +97,7 @@ let currentPlayer = null;
 let cooldownTimer = null;
 let todayWinner = null;
 let activityState = "loading";
+let cooldownSyncedAt = 0;
 let rankingTimer = null;
 let isOpeningZongzi = false;
 let lastOpenClickAt = 0;
@@ -352,56 +352,39 @@ function showEndedPage(game){
     document.getElementById("logoutBtn").style.display="none";
 }
 
-async function loadOrCreatePlayer(user){
+async function loadPlayerStatus(user){
     const info=getDiscordInfo(user);
 
-    const {data:players,error}=await supabaseClient
-        .from("players")
-        .select("*")
-        .eq("discord_id",info.discordId)
-        .order("id",{ascending:true})
-        .limit(1);
+    const {data,error}=await supabaseClient.rpc("get_player_status_rpc",{
+        p_discord_id: info.discordId,
+        p_discord_name: info.name
+    });
 
     if(error){
-        debug("讀取玩家錯誤：" + error.message);
+        debug("RPC get_player_status_rpc 錯誤：" + error.message);
         return null;
     }
 
-    let player=players && players.length>0 ? players[0] : null;
+    const result = data || {};
 
-    if(!player){
-        const {data:newPlayer,error:insertError}=await supabaseClient
-            .from("players")
-            .insert({
-                discord_id:info.discordId,
-                discord_name:info.name,
-                last_open_time:null,
-                total_removed:0,
-                total_opens:0,
-                total_wins:0
-            })
-            .select()
-            .single();
-
-        if(insertError){
-            debug("建立玩家錯誤：" + insertError.message);
-            return null;
-        }
-
-        player=newPlayer;
-    }else{
-        const {data:updatedPlayer}=await supabaseClient
-            .from("players")
-            .update({discord_name:info.name})
-            .eq("id",player.id)
-            .select()
-            .single();
-
-        if(updatedPlayer) player=updatedPlayer;
+    if(!result.ok){
+        debug("玩家狀態讀取失敗：" + (result.message || result.reason || "unknown"));
+        return null;
     }
 
-    currentPlayer=player;
-    return player;
+    currentPlayer = {
+        discord_id: info.discordId,
+        discord_name: info.name,
+        total_removed: result.player_total_removed || 0,
+        total_opens: result.player_total_opens || 0,
+        total_wins: result.player_total_wins || 0,
+        cooldown: !!result.cooldown,
+        remaining_seconds: Number(result.remaining_seconds || 0),
+        next_time: result.next_time || null
+    };
+
+    cooldownSyncedAt = Date.now();
+    return currentPlayer;
 }
 
 function updateCooldownUI(){
@@ -440,22 +423,20 @@ function updateCooldownUI(){
         return;
     }
 
-    if(!currentPlayer.last_open_time){
-        openBtn.disabled=false;
-        cooldownText.textContent="目前可以拆粽子";
+    const originalSeconds = Number(currentPlayer.remaining_seconds || 0);
+    const elapsedSeconds = cooldownSyncedAt ? Math.floor((Date.now() - cooldownSyncedAt) / 1000) : 0;
+    const remainSeconds = Math.max(0, originalSeconds - elapsedSeconds);
+
+    if(remainSeconds > 0){
+        openBtn.disabled=true;
+        cooldownText.textContent="冷卻中，剩餘：" + formatTime(remainSeconds * 1000);
         return;
     }
 
-    const last=new Date(currentPlayer.last_open_time).getTime();
-    const remain=last + COOLDOWN_HOURS*60*60*1000 - Date.now();
-
-    if(remain<=0){
-        openBtn.disabled=false;
-        cooldownText.textContent="目前可以拆粽子";
-    }else{
-        openBtn.disabled=true;
-        cooldownText.textContent="冷卻中，剩餘：" + formatTime(remain);
-    }
+    currentPlayer.cooldown = false;
+    currentPlayer.remaining_seconds = 0;
+    openBtn.disabled=false;
+    cooldownText.textContent="目前可以拆粽子";
 }
 
 function startCooldownTimer(){
@@ -489,6 +470,7 @@ async function openZongzi(){
         }
 
         await loadGameState();
+        await loadPlayerStatus(currentUser);
         updateCooldownUI();
 
         if(activityState === "not_started"){
@@ -533,6 +515,12 @@ async function openZongzi(){
         if(!result.ok){
             if(result.reason === "cooldown"){
                 const seconds = Number(result.remaining_seconds || 0);
+                if(currentPlayer){
+                    currentPlayer.cooldown = seconds > 0;
+                    currentPlayer.remaining_seconds = seconds;
+                    currentPlayer.next_time = result.next_time || null;
+                    cooldownSyncedAt = Date.now();
+                }
                 diceResult.textContent = seconds > 0
                     ? "冷卻中，剩餘：" + formatTime(seconds * 1000)
                     : (result.message || "冷卻中，還不能拆粽子");
@@ -552,7 +540,6 @@ async function openZongzi(){
 
         currentPlayer.discord_id = info.discordId;
         currentPlayer.discord_name = info.name;
-        currentPlayer.last_open_time = new Date().toISOString();
         currentPlayer.total_removed = result.player_total_removed || 0;
         currentPlayer.total_opens = result.player_total_opens || 0;
         currentPlayer.total_wins = result.player_total_wins || 0;
@@ -566,6 +553,7 @@ async function openZongzi(){
         await loadWinners();
         await loadRanking();
         await loadGameState();
+        await loadPlayerStatus(currentUser);
         refreshUserBox();
         startCooldownTimer();
     }finally{
@@ -639,7 +627,7 @@ async function checkUser(){
         return;
     }
 
-    await loadOrCreatePlayer(user);
+    await loadPlayerStatus(user);
     await loadRanking();
 
     loginBtn.style.display="none";
