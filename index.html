@@ -121,6 +121,22 @@ h1,.main-title{
     font-weight:400;
     text-shadow:3px 3px 0 #fff1a8, 5px 5px 0 rgba(27,18,9,.15);
 }
+
+.activity-dates{
+    margin:-12px auto 18px;
+    display:inline-block;
+    padding:10px 14px;
+    background:#fff1a8;
+    border:3px solid var(--black);
+    box-shadow:3px 3px 0 rgba(63,37,14,.75);
+    color:#8f3f10;
+    font-size:11px;
+    line-height:2;
+}
+.activity-dates span{
+    color:#24170c;
+}
+
 h2{
     margin:0 0 14px;
     color:var(--brown-dark);
@@ -492,6 +508,7 @@ p{
             <div id="leafBurstLayer" class="leaf-burst-layer"></div>
         </div>
         <h1 class="main-title">🎋 2026端午拆粽大作戰 🎋</h1>
+        <div class="activity-dates" id="activityDates">活動時間讀取中...</div>
 
         <div class="card" id="userBox">載入中...</div>
 
@@ -563,6 +580,16 @@ function formatTime(ms){
 function formatDate(dateText){
     const d = new Date(dateText + "T00:00:00");
     return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function updateActivityDates(game){
+    const box = document.getElementById("activityDates");
+    if(!box || !game) return;
+
+    box.innerHTML = `
+        活動開始時間：<span>${formatDate(game.activity_start_date)}</span><br>
+        活動結束時間：<span>${formatDate(game.activity_end_date)}</span>
+    `;
 }
 
 function getDiscordInfo(user){
@@ -746,6 +773,7 @@ async function loadGameState(){
     }
 
     currentGameState = game;
+    updateActivityDates(game);
     leavesBox.textContent = game.remaining_leaves;
 
     if(activityState === "not_started"){
