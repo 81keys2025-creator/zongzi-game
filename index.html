@@ -196,6 +196,56 @@ body:before{
     font-family:"Press Start 2P","Microsoft JhengHei",monospace;
     text-shadow:2px 2px 0 #b7f094;
 }
+.zongzi-speech{
+    position:absolute;
+    left:50%;
+    top:-58px;
+    transform:translateX(-50%);
+    min-width:210px;
+    max-width:320px;
+    padding:10px 12px;
+    background:#fff7c7;
+    border:3px solid var(--black);
+    box-shadow:4px 4px 0 rgba(63,37,14,.75);
+    color:#8f3f10;
+    font-family:"Microsoft JhengHei",sans-serif;
+    font-size:14px;
+    line-height:1.5;
+    font-weight:900;
+    text-align:center;
+    z-index:30;
+    animation:speechPop 1.6s steps(2,end) infinite;
+}
+.zongzi-speech:after{
+    content:"";
+    position:absolute;
+    left:50%;
+    bottom:-13px;
+    transform:translateX(-50%);
+    width:0;
+    height:0;
+    border-left:10px solid transparent;
+    border-right:10px solid transparent;
+    border-top:13px solid var(--black);
+}
+.zongzi-speech:before{
+    content:"";
+    position:absolute;
+    left:50%;
+    bottom:-8px;
+    transform:translateX(-50%);
+    width:0;
+    height:0;
+    border-left:7px solid transparent;
+    border-right:7px solid transparent;
+    border-top:9px solid #fff7c7;
+    z-index:1;
+}
+@keyframes speechPop{
+    0%,100%{transform:translateX(-50%) translateY(0);}
+    50%{transform:translateX(-50%) translateY(-4px);}
+}
+
 .zongzi{
     position:relative;
     width:fit-content;
@@ -588,6 +638,20 @@ p{
     .container{order:1;padding:22px 16px;}
     .container:before{display:none;}
     .zongzi img{width:210px;}
+    .zongzi-speech{
+        position:relative;
+        left:auto;
+        top:auto;
+        transform:none;
+        min-width:0;
+        max-width:100%;
+        margin:0 auto 10px;
+        font-size:13px;
+    }
+    .zongzi-speech:before,
+    .zongzi-speech:after{
+        left:50%;
+    }
     h1,.main-title{font-size:20px;line-height:1.7;}
     h2{font-size:15px;}
     .leaves{font-size:42px;}
@@ -601,7 +665,7 @@ p{
 <body>
 <div class="layout">
     <div class="side">
-        <div class="winner-title">🏆 拆粽者</div>
+        <div class="winner-title">🏆 中獎者列表</div>
         <div id="winnerList">讀取中...</div>
 
         <div class="rank-title">📊 拆粽排行榜 TOP10</div>
@@ -625,12 +689,13 @@ p{
             </div>
 
             <div class="zongzi">
+                <div class="zongzi-speech" id="zongziSpeech">來拆我啊</div>
                 <img src="zongzi.png" alt="粽子">
                 <div id="leafBurstLayer" class="leaf-burst-layer"></div>
             </div>
 
             <div class="reward-wrap reward-right">
-                <div class="reward-label">拆粽排行TOP3獎勵</div>
+                <div class="reward-label">拆粽排行TOP三獎勵</div>
                 <details class="reward-toggle">
                     <summary>🐰 戰鬥兔子蹦蹦裝</summary>
                     <div class="reward-content">
@@ -688,6 +753,19 @@ let rankingTimer = null;
 let isOpeningZongzi = false;
 let lastOpenClickAt = 0;
 const OPEN_CLICK_GUARD_MS = 3000;
+
+const ZONGZI_SPEECHES = [
+    "來拆我啊",
+    "如果你願意一層一層一層的拆開我的心",
+    "我還有好多層可以拆"
+];
+
+function randomizeZongziSpeech(){
+    const box = document.getElementById("zongziSpeech");
+    if(!box) return;
+    const text = ZONGZI_SPEECHES[Math.floor(Math.random() * ZONGZI_SPEECHES.length)];
+    box.textContent = text;
+}
 
 function debug(msg){
     document.getElementById("debugBox").textContent += "\n" + msg;
@@ -764,7 +842,7 @@ async function loadWinners(){
     }
 
     if(!data || data.length===0){
-        winnerList.innerHTML=`<div class="empty-winner">目前尚未有拆粽者</div>`;
+        winnerList.innerHTML=`<div class="empty-winner">目前尚未有中獎者</div>`;
         return [];
     }
 
@@ -935,7 +1013,7 @@ function showEndedPage(game){
         <div class="end-title">🏆 端午拆粽子活動已結束</div>
         <div class="end-text">
             感謝各位參與本次活動<br>
-            請查看左側拆粽者者列表與最終排行榜
+            請查看左側中獎者列表與最終排行榜
         </div>
     `;
 
@@ -1294,6 +1372,9 @@ async function checkUser(){
 supabaseClient.auth.onAuthStateChange(() => {
     checkUser();
 });
+
+randomizeZongziSpeech();
+setInterval(randomizeZongziSpeech, 8000);
 
 checkUser();
 
